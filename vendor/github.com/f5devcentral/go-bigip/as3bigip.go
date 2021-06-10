@@ -53,6 +53,8 @@ type Results1 struct {
 	RunTime   int64  `json:"runTime,omitempty"`
 }
 
+var pollingTimeout time.Duration = 300 * time.Second
+
 /*
 PostAs3Bigip used for posting as3 json file to BIGIP
 */
@@ -75,6 +77,7 @@ func (b *BigIP) PostAs3Bigip(as3NewJson string, tenantFilter string) (error, str
 			return err, ""
 		}
 		respCode = fastTask["results"].([]interface{})[0].(map[string]interface{})["code"].(float64)
+		log.Printf("[DEBUG] Response Code: %+v", respCode)
 		if respCode != 0 && respCode != 503 {
 			tenant_list, tenant_count, _ := b.GetTenantList(as3NewJson)
 			if tenantCompare(tenant_list, tenantFilter) == 1 {
@@ -97,28 +100,38 @@ func (b *BigIP) PostAs3Bigip(as3NewJson string, tenantFilter string) (error, str
 					log.Printf("[DEBUG]Sucessfully Created Application with ID  = %v", respID)
 					break // break here
 				} else if success_count == 0 {
-					return fmt.Errorf("Tenant Creation failed"), ""
+					j, _ := json.MarshalIndent(fastTask["results"].([]interface{}), "", "\t")
+					return fmt.Errorf("Tenant Creation failed. Response: %+v", string(j)), ""
 				} else {
 					finallist := strings.Join(successfulTenants[:], ",")
 					j, _ := json.MarshalIndent(fastTask["results"].([]interface{}), "", "\t")
 					return fmt.Errorf("as3 config post error response %+v", string(j)), finallist
 				}
 			}
+			log.Printf("[DEBUG] Response Code:%+v", respCode)
 			if respCode == 200 {
 				log.Printf("[DEBUG]Sucessfully Created Application with ID  = %v", respID)
 				break // break here
 			}
 			if respCode >= 400 {
-				return fmt.Errorf("Tenant Creation failed"), ""
+				j, _ := json.MarshalIndent(fastTask["results"].([]interface{}), "", "\t")
+				return fmt.Errorf("Tenant Creation failed. Response: %+v", string(j)), ""
 			}
 		}
 		if respCode == 503 {
+			//startingTime := time.Now().UTC()
 			taskIds, err := b.getas3Taskid()
 			if err != nil {
 				return err, ""
 			}
+			if len(taskIds) == 0 {
+				time.Sleep(2 * time.Second)
+				return b.PostAs3Bigip(as3NewJson, tenantFilter)
+			}
 			for _, id := range taskIds {
 				if b.pollingStatus(id) {
+					//endingTime := time.Now().UTC()
+					//var duration time.Duration = endingTime.Sub(startingTime)
 					return b.PostAs3Bigip(as3NewJson, tenantFilter)
 				}
 			}
@@ -148,6 +161,7 @@ func (b *BigIP) DeleteAs3Bigip(tenantName string) (error, string) {
 			return err, ""
 		}
 		respCode = fastTask.Results[0].Code
+		log.Printf("[DEBUG] RespCode:%+v", respCode)
 		if respCode != 0 && respCode != 503 {
 			tenant_count := len(strings.Split(tenantName, ","))
 			if tenant_count != 1 {
@@ -178,13 +192,19 @@ func (b *BigIP) DeleteAs3Bigip(tenantName string) (error, string) {
 				break // break here
 			}
 			if respCode >= 400 {
-				return errors.New(fmt.Sprintf("Tenant Deletion failed")), ""
+				j, _ := json.MarshalIndent(fastTask, "", "\t")
+				return fmt.Errorf("Tenant Deletion failed with Response: \n %+v", string(j)), ""
+				//return errors.New(fmt.Sprintf("Tenant Deletion failed")), ""
 			}
 		}
 		if respCode == 503 {
 			taskIds, err := b.getas3Taskid()
 			if err != nil {
 				return err, ""
+			}
+			if len(taskIds) == 0 {
+				time.Sleep(2 * time.Second)
+				return b.DeleteAs3Bigip(tenantName)
 			}
 			for _, id := range taskIds {
 				if b.pollingStatus(id) {
@@ -330,6 +350,8 @@ func (b *BigIP) pollingStatus(id string) bool {
 	if err != nil {
 		return false
 	}
+	log.Printf("[DEBUG] ID:%+v", id)
+	log.Printf("[DEBUG] Code :%+v", taskList)
 	if taskList.Results[0].Code != 200 && taskList.Results[0].Code != 503 {
 		time.Sleep(1 * time.Second)
 		return b.pollingStatus(id)

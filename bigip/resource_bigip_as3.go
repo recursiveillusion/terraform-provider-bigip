@@ -49,11 +49,12 @@ func resourceBigipAs3() *schema.Resource {
 				Required:    true,
 				Description: "AS3 json",
 				StateFunc: func(v interface{}) string {
+					log.Println("[DEBUG]----StateFunc-----")
 					json, _ := structure.NormalizeJsonString(v)
-
 					return json
 				},
 				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+					log.Println("[DEBUG]-----State Diff Function-----")
 					oldResp := []byte(old)
 					newResp := []byte(new)
 					oldJsonref := make(map[string]interface{})
@@ -62,6 +63,7 @@ func resourceBigipAs3() *schema.Resource {
 					_ = json.Unmarshal(newResp, &newJsonref)
 					jsonEqualityBefore := reflect.DeepEqual(oldJsonref, newJsonref)
 					if jsonEqualityBefore == true {
+						log.Println("[DEBUG]---- jsonEqualityBefore = TRUE -----")
 						return true
 					}
 					for key, value := range oldJsonref {
@@ -91,19 +93,24 @@ func resourceBigipAs3() *schema.Resource {
 					jsonEqualityAfter := reflect.DeepEqual(oldJsonref, newJsonref)
 					if ignoreMetadata == true {
 						if jsonEqualityAfter == true {
+							log.Println("[DEBUG]----jsonEqualityAfter && ignoreMetadata-----")
 							return true
 						} else {
+							log.Println("[DEBUG]---- ignoreMetadata-----")
 							return false
 						}
 
 					} else {
 						if jsonEqualityBefore == false {
+							log.Println("[DEBUG]---- No ignoreMetadata && No jsonEqualityBefore-----")
 							return false
 						}
 					}
+					log.Println("[DEBUG]---- No ignoreMetadata && No jsonEqualityBefore-----")
 					return true
 				},
 				ValidateFunc: func(v interface{}, k string) (ws []string, errors []error) {
+					log.Println("[DEBUG]----ValidateFunc-----")
 					if _, err := structure.NormalizeJsonString(v); err != nil {
 						errors = append(errors, fmt.Errorf("%q contains an invalid JSON: %s", k, err))
 					}
@@ -231,7 +238,7 @@ func resourceBigipAs3Read(d *schema.ResourceData, meta interface{}) error {
 		if err.Error() == "unexpected end of JSON input" {
 			log.Printf("[ERROR] %v", err)
 			d.SetId("")
-			return nil
+			return err
 		}
 		return err
 	}
@@ -331,7 +338,6 @@ func resourceBigipAs3Delete(d *schema.ResourceData, meta interface{}) error {
 	name := d.Id()
 	err, failedTenants := client.DeleteAs3Bigip(name)
 	if err != nil {
-		log.Printf("[ERROR] Unable to Delete: %v :", err)
 		return err
 	}
 	if failedTenants != "" {
