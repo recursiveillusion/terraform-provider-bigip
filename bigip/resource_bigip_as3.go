@@ -54,6 +54,8 @@ func resourceBigipAs3() *schema.Resource {
 					return json
 				},
 				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+					log.Printf("[DEBUG]: as3_json state before: \n %+v", old)
+					log.Printf("[DEBUG]: as3_json state after: \n %+v", new)
 					oldResp := []byte(old)
 					newResp := []byte(new)
 					oldJsonref := make(map[string]interface{})
