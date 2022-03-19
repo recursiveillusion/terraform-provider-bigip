@@ -216,6 +216,8 @@ func resourceBigipDoCreate(d *schema.ResourceData, meta interface{}) error {
 				if resultMap.(map[string]interface{})["status"] != "RUNNING" {
 					return fmt.Errorf("Error while reading the response body :%v ", resultMap)
 				}
+				time.Sleep(1 * time.Second)
+				continue
 			default:
 				log.Printf("StatusCode:%+v", taskResp.StatusCode)
 				time.Sleep(1 * time.Second)
@@ -471,6 +473,8 @@ func resourceBigipDoUpdate(d *schema.ResourceData, meta interface{}) error {
 				if resultMap.(map[string]interface{})["status"] != "RUNNING" {
 					return fmt.Errorf("Error while reading the response body :%v ", resultMap)
 				}
+				time.Sleep(1 * time.Second)
+				continue
 			default:
 				time.Sleep(1 * time.Second)
 				continue
